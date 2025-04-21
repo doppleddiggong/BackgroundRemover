@@ -2,6 +2,8 @@
 
 이미지에서 배경을 자동으로 제거하는 프로그램입니다. [transparent-background](https://github.com/plemeri/transparent-background) 라이브러리를 사용하여 고품질의 배경 제거 기능을 제공합니다.
 
+<img width="904" alt="Image" src="https://github.com/user-attachments/assets/d9073622-cf9f-48f0-b975-33ca10b2add0" />
+
 ## 시스템 요구사항
 - Windows 10 이상
 - Python 3.8 이상

@@ -10,8 +10,8 @@ from io import BytesIO
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout, 
                            QHBoxLayout, QWidget, QLabel, QFileDialog, QProgressBar,
                            QSpacerItem, QSizePolicy, QComboBox)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QPixmap, QImage, QFont
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QMimeData
+from PyQt6.QtGui import QPixmap, QImage, QFont, QDragEnterEvent, QDropEvent
 from PIL import Image
 from transparent_background import Remover
 
@@ -158,6 +158,78 @@ class BackgroundRemoveThread(QThread):
         except Exception as e:
             self.logger.error(f"처리 중 오류 발생: {str(e)}", exc_info=True)
             self.error.emit(f"처리 중 오류 발생: {str(e)}")
+
+class DragDropLabel(QLabel):
+    dropped = pyqtSignal(str)  # 드롭된 파일 경로를 전달하는 시그널
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setText("이미지를 여기로 드래그하세요")
+        self.setStyleSheet("""
+            QLabel {
+                border: 2px dashed #cccccc;
+                border-radius: 5px;
+                background-color: #f8f8f8;
+                padding: 10px;
+            }
+            QLabel:hover {
+                border-color: #4CAF50;
+                background-color: #f0f0f0;
+            }
+        """)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        if event.mimeData().hasUrls():
+            url = event.mimeData().urls()[0]
+            if url.isLocalFile():
+                file_path = url.toLocalFile()
+                if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    event.acceptProposedAction()
+                    self.setStyleSheet("""
+                        QLabel {
+                            border: 2px dashed #4CAF50;
+                            border-radius: 5px;
+                            background-color: #e8f5e9;
+                            padding: 10px;
+                        }
+                    """)
+                    return
+        self.setStyleSheet("""
+            QLabel {
+                border: 2px dashed #f44336;
+                border-radius: 5px;
+                background-color: #ffebee;
+                padding: 10px;
+            }
+        """)
+
+    def dragLeaveEvent(self, event):
+        self.setStyleSheet("""
+            QLabel {
+                border: 2px dashed #cccccc;
+                border-radius: 5px;
+                background-color: #f8f8f8;
+                padding: 10px;
+            }
+        """)
+
+    def dropEvent(self, event: QDropEvent):
+        if event.mimeData().hasUrls():
+            url = event.mimeData().urls()[0]
+            if url.isLocalFile():
+                file_path = url.toLocalFile()
+                if file_path.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    self.dropped.emit(file_path)
+        self.setStyleSheet("""
+            QLabel {
+                border: 2px dashed #cccccc;
+                border-radius: 5px;
+                background-color: #f8f8f8;
+                padding: 10px;
+            }
+        """)
 
 class BackgroundRemover(QMainWindow):
     def __init__(self):
@@ -344,10 +416,9 @@ class BackgroundRemover(QMainWindow):
         original_title = QLabel("원본 이미지")
         original_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         original_layout.addWidget(original_title)
-        self.original_label = QLabel()
-        self.original_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.original_label = DragDropLabel()
         self.original_label.setMinimumSize(500, 500)
-        self.original_label.setStyleSheet("border: 2px solid #cccccc; border-radius: 5px;")
+        self.original_label.dropped.connect(self.handle_dropped_image)
         original_layout.addWidget(self.original_label)
         image_layout.addWidget(original_container)
         
@@ -541,6 +612,19 @@ class BackgroundRemover(QMainWindow):
             '더 많이 지우기': '배경을 최대한 제거 (가장자리가 선명해짐)'
         }
         self.postprocess_desc_label.setText(descriptions.get(postprocess, ''))
+
+    def handle_dropped_image(self, file_path):
+        """드롭된 이미지 처리"""
+        try:
+            self.input_path = file_path
+            self.display_image(file_path, self.original_label)
+            self.remove_bg_btn.setEnabled(True)
+            self.status_label.setText(f"선택된 이미지: {os.path.basename(file_path)}")
+            self.result_label.clear()
+            self.result_label.setText("결과가 여기에 표시됩니다")
+        except Exception as e:
+            self.logger.error(f"드롭된 이미지 처리 중 오류: {str(e)}", exc_info=True)
+            self.status_label.setText("이미지 로드 중 오류가 발생했습니다")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
